@@ -4,7 +4,7 @@ library(readxl)
 dataset_names <- c(1:22, 51:56) #see overview_data.xslx file in main folder
 
 load_dataset <- function(dataset_number) {
-    read_excel("../data/all_data.xlsx", sheet = paste("dataset", dataset_number), na = "x")
+    read_excel("../data/all_data_HW.xlsx", sheet = paste("dataset", dataset_number), na = "x")
 }
 
 # load all datasets
@@ -22,9 +22,11 @@ names(all_data) <- all_species_names
 extract_genotypes <- function(data_sheet) {
     data_sheet_2 <- data_sheet[3:nrow(data_sheet), 3:ncol(data_sheet)]
     names(data_sheet_2) <- 1:ncol(data_sheet_2)
+    data_sheet_2 <- data_sheet_2[rowSums(is.na(data_sheet_2)) != ncol(data_sheet_2), ]
     # row.names(data_sheet_2) <- data_sheet_2[[1]]
     out <- data_sheet_2
 }
+
 
 # just pure genotypes
 all_genotypes <- lapply(all_data, extract_genotypes)
@@ -36,3 +38,4 @@ all_g2_vals <- as.numeric(lapply(all_genotypes, function(x) out <- g2_microsats(
 
 plot(all_g2_vals)
 text(1:28, all_g2_vals, all_species_names, cex = 0.7, pos = 4)
+?convert_raw
