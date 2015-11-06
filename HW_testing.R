@@ -1,5 +1,4 @@
 # Hardy Weinberg
-library(HardyWeinberg)
 library(pegas)
 library("ape")
 library("pegas")
@@ -42,7 +41,8 @@ change_geno_format <- function(seal_data_df) {
 }
 
 # format all seal datasets
-seal_data_genind <- lapply(seal_data, change_geno_format)
+seal_data_locus_format <- lapply(seal_data, change_geno_format)
+
 check_na_genotypes <- function(df) {
                                 df[3:ncol(df)] <- lapply(df[3:ncol(df)], function(x) {
                                     if (sum(grepl("NA", x))>0) {
@@ -51,27 +51,29 @@ check_na_genotypes <- function(df) {
                                     x
                                 })
                         df
-                    }
-seal_data_genind <- lapply(seal_data_genind, check_na_genotypes)
+}
 
-# change names of datasets to avoid spaces, brackets and other weird symbols
-names(seal_data_genind) <- str_replace_all(names(seal_data_genind), " ", "_")
-names(seal_data_genind) <- str_replace_all(names(seal_data_genind), "'", "")
-names(seal_data_genind) <- str_replace_all(names(seal_data_genind), "\\(", "")
-names(seal_data_genind) <- str_replace_all(names(seal_data_genind), "\\)", "")
+# MAIN FORMAT to convert to genind and loci classes
+seal_data_locus_format <- lapply(seal_data_locus_format, check_na_genotypes)
+
+# # change names of datasets to avoid spaces, brackets and other weird symbols
+# names(seal_data_locus_format) <- str_replace_all(names(seal_data_locus_format), " ", "_")
+# names(seal_data_locus_format) <- str_replace_all(names(seal_data_locus_format), "'", "")
+# names(seal_data_locus_format) <- str_replace_all(names(seal_data_locus_format), "\\(", "")
+# names(seal_data_locus_format) <- str_replace_all(names(seal_data_locus_format), "\\)", "")
 
 
 
 # write to txt files
-for (i in 1:length(seal_data_genind)) {
-        write.table(seal_data_genind[[i]], file = paste("../data/genind_formatted/", names(seal_data_genind[i]), ".txt", sep = ""
+for (i in 1:length(seal_data_locus_format)) {
+        write.table(seal_data_locus_format[[i]], file = paste("../data/genind_formatted/", names(seal_data_locus_format[i]), ".txt", sep = ""
                                                         ), sep = " ", quote = FALSE, row.names = FALSE)
 }
 
 seal_data_pegas <- list()
-for (i in 1:length(seal_data_genind)) {
-seal_data_pegas[[names(seal_data_genind)[i]]] <- read.loci(paste("../data/genind_formatted/", names(seal_data_genind)[i], ".txt", sep = ""),
-               header = TRUE, loci.sep = " ", allele.sep = "/", col.pop = 2, col.loci = c(3:ncol(seal_data_genind[[i]])))
+for (i in 1:length(seal_data_locus_format)) {
+seal_data_pegas[[names(seal_data_locus_format)[i]]] <- read.loci(paste("../data/genind_formatted/", names(seal_data_locus_format)[i], ".txt", sep = ""),
+               header = TRUE, loci.sep = " ", allele.sep = "/", col.pop = 2, col.loci = c(3:ncol(seal_data_locus_format[[i]])))
 }
 
 save(seal_data_pegas, file = "seal_data_pegas.RData")
@@ -99,16 +101,23 @@ all_non_hw_chi <- lapply(all_hw, function(x) {
 })
 all_non_hw_number_chi <- unlist(lapply(all_non_hw_chi, nrow))
 
+# number of populations
+num_pop <- unlist(lapply(seal_data_locus_format, function(x) out <- length(levels(as.factor(x$pop)))))
+
 
 seal_data_descr <- data.frame("sample_size" = sample_size,
                               "loci_full" = loci_full ,
                               "total_genotypes" = total_genotypes,
+                              "number_populations" = num_pop,
                               "non_hw_exact_test" = all_non_hw_number,
                               "non_hw_chisqu_test" = all_non_hw_number_chi)
                               
 
+write.csv(seal_data_descr, "seal_data_descriptives.csv")
 
 
-
-Erroneous_rings_to_remove <- 
-    Ceuta_Capture_History[which(grepl("[.]",Ceuta_Capture_History$ring) & grepl("[^gbsGXMWRBYOLS.|]",Ceuta_Capture_History$ring)),]
+# NULL allele test
+library(PopGenReport)
+test <- loci2genind(seal_data_pegas[[1]])
+seal_data_genind <- lapply(seal_data_pegas, loci2genind) 
+?null.all

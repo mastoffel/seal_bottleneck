@@ -5,17 +5,27 @@ library(stringr)
 dataset_names <- c(1:22, 51:56) #see overview_data.xslx file in main folder
 
 load_dataset <- function(dataset_number) {
-    read_excel("../data/all_data_clean.xlsx", sheet = paste("dataset", dataset_number), na = "x")
+    read_excel("../data/all_data.xlsx", sheet = paste("dataset", dataset_number), na = "x")
 }
 
 # load all datasets
 all_data <- lapply(dataset_names, load_dataset)
-all_data[[12]] <-  read_excel("../data/all_data_clean.xlsx", sheet = "dataset 12-2", na = "x")
+all_data[[12]] <-  read_excel("../data/all_data.xlsx", sheet = "dataset 12-2", na = "x")
 
 # extract all_species names
 all_species_names <- unlist(lapply(all_data, function(x) out <- names(x)[1]))
 all_species_names[12] <- "Crabeater seal recoded"
 all_species_names[23] <- "South American (Falklands) sea lion"
+
+# change names of datasets to avoid spaces, brackets and other weird symbols
+all_species_names <- str_replace_all(all_species_names, "dataset", "")
+all_species_names <- str_replace_all(all_species_names, "data", "")
+all_species_names <- str_replace_all(all_species_names, "  ", "_")
+all_species_names <- str_trim(all_species_names)
+all_species_names <- str_replace_all(all_species_names, " ", "_")
+all_species_names <- str_replace_all(all_species_names, "'", "")
+all_species_names<- str_replace_all(all_species_names, "\\(", "")
+all_species_names <- str_replace_all(all_species_names, "\\)", "")
 
 # name all datasheets in the list with the appropriate species names
 names(all_data) <- all_species_names
