@@ -56,13 +56,6 @@ check_na_genotypes <- function(df) {
 # MAIN FORMAT to convert to genind and loci classes
 seal_data_locus_format <- lapply(seal_data_locus_format, check_na_genotypes)
 
-# # change names of datasets to avoid spaces, brackets and other weird symbols
-# names(seal_data_locus_format) <- str_replace_all(names(seal_data_locus_format), " ", "_")
-# names(seal_data_locus_format) <- str_replace_all(names(seal_data_locus_format), "'", "")
-# names(seal_data_locus_format) <- str_replace_all(names(seal_data_locus_format), "\\(", "")
-# names(seal_data_locus_format) <- str_replace_all(names(seal_data_locus_format), "\\)", "")
-
-
 
 # write to txt files
 for (i in 1:length(seal_data_locus_format)) {
@@ -86,6 +79,7 @@ total_genotypes <- sample_size * loci_all
 
 # Exact test of Hardy-Weinberg equilibrium by Markov chain Monte Carlo----------------
 load("seal_data_pegas.RData")
+
 # hardy weinberg tests on everything
 all_hw <- lapply(seal_data_pegas, hw.test)
 all_non_hw <- lapply(all_hw, function(x) {

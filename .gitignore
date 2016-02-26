@@ -1,3 +1,7 @@
 .Rproj.user
 .Rhistory
 .RData
+cluster_summary_plots/
+structure_results/
+old/
+data/
