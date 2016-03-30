@@ -1,5 +1,31 @@
+
+## script to analyse structure output for 29 seal species
+
+#(1) summarise structure output files with tables / graphs
+#(2) add cluster membership 
+#(3) create new data.frames with largest cluster
+#(4) create new data.frames with single largest (geographical) populations
+#(5) put all genotypes into a large list
+
+
+
 # summarising output with pophelper package from github
-load("seal_bottleneck_data_simple.RData")
+
+
+# load data with original population names ---------------------------------------------------------
+library(readxl)
+# sheet numbers to load
+dataset_names <- excel_sheets("data/all_seals_full_final.xls")
+
+load_dataset <- function(dataset_names) {
+    read_excel("data/all_seals_full_final.xls", sheet = dataset_names)
+}
+# load all datasets
+all_seals <- lapply(dataset_names, load_dataset)
+names(all_seals) <- dataset_names
+
+
+# process structure results ------------------------------------------------------------------------
 library(devtools)
 library(stringr)
 library(pophelper)
@@ -16,6 +42,7 @@ seal_species_names <- names(all_seals)
 system("mkdir cluster_summary_plots")
 system("mkdir structure_result_tables")
 
+# structure output summary and lnK plots -----------------------------------------------------------
 seals_structure_summary <- list()
 runs_to_df <- list()
 for (i in 1:length(seal_species_names)) {
@@ -89,7 +116,9 @@ for (i in 1:length(seal_species_names)) {
     setwd(current_dir)
 }
     
-    
+
+
+# optimal K ---------------------------------------------------------------------------------------
 # rule: if mean estimated ln probability of data is highest at K=1, decide for K=1
 #       if not, use evanno-method (delta K) to decide which k
 
@@ -118,12 +147,14 @@ ks <- do.call(rbind, lapply(seals_structure_summary, both_k))
 # write.table(ks, "best_k.txt", sep = "\t")
 
 
-# extract_largest_cluster and name clusters by K (e.g. K_10)
+# extract_largest_cluster and name clusters by K (e.g. K_10) ---------------------------------------
+# create reduced "runs" dataset with just the first of each k run
 names(runs_to_df) <- seal_species_names
 first_run_each_k <- seq(from = 1, to = 50, by = 5)
 
 extract_and_name_runs <- function(x) {
     runs <- x[first_run_each_k]
+    runs[[1]] <- data.frame(cluster = rep(1, nrow(runs[[2]]))) # delete the one cluster matrix due to problems with NaN
     ks <- unlist(lapply(runs, ncol))
     names(runs) <- paste0("K_", ks)
     runs
@@ -148,8 +179,108 @@ get_cluster_info <- function(species, runs_to_df_reduced, clusters) {
     assign_to_cluster
 }
 
-lapply(seal_species_names[1:6], get_cluster_info, runs_to_df_reduced, clusters)
+all_clusters <- lapply(seal_species_names, get_cluster_info, runs_to_df_reduced, clusters)
 # check seal_species_names[7] --> weird species runs
 
-which(cluster > 1)
-names(runs_to_df_simple)
+
+# add cluster membership to genotypes
+names(all_clusters) <- dataset_names
+add_cluster_to_geno <- function(species, all_clusters, all_seals){
+    out <- cbind(all_seals[[species]][1:2], all_clusters[species], all_seals[[species]][3:ncol(all_seals[[species]])])
+}
+
+all_seals_clusters <- lapply(dataset_names, add_cluster_to_geno, all_clusters, all_seals)
+
+## ensure correct column types
+all_seals_clusters_final <- lapply(all_seals_clusters, function(x){
+                                                            x$id <- as.character(x$id) 
+                                                            x
+                                                            })
+names(all_seals_clusters_final) <- dataset_names
+
+# write excel file with each dataset plus clusters
+library(WriteXLS)
+envir <- environment()
+list_to_df <- function(species, dfs, envir){
+    assign(species, dfs[[species]], envir)
+}
+lapply(dataset_names, list_to_df, all_seals_clusters_final, envir)
+WriteXLS(dataset_names, ExcelFileName = "all_seals_clusters.xls")
+
+
+# make new dataframes
+cluster_df <- function(species, all_seals_clusters_final){
+    seal_df <- all_seals_clusters_final[[species]]
+    largest_cluster <- unname(which.max(table(seal_df$cluster)))
+    seal_df_largest_cluster <- seal_df[seal_df$cluster == largest_cluster , ]
+    if (nrow(seal_df) != nrow(seal_df_largest_cluster)) {
+        df_name <- paste0(species, "_cl_", largest_cluster)
+        return(list(df_name, seal_df_largest_cluster))
+    }
+}
+
+largest_clusters <- lapply(dataset_names, cluster_df, all_seals_clusters_final)
+# names(largest_clusters) <- dataset_names
+
+# get rid of non-cluster populations (NULL anyway) and keep new largest cluster data.frames
+clustered_pop <- largest_clusters[!sapply(largest_clusters, is.null)]
+names_clusters <- unlist(lapply(clustered_pop, function(x) x[1]))
+cluster_geno <- lapply(clustered_pop, function(x) x[[2]])
+names(cluster_geno) <- names_clusters
+
+# append to all_seals
+all_seals_extended <- append(all_seals_clusters_final, cluster_geno)
+
+
+# extract largest single population and add to genotypes list -------------------------------------
+
+# make new dataframes
+pop_df <- function(species, all_seals_clusters_final){
+    seal_df <- all_seals_clusters_final[[species]]
+    if (any(seal_df$cluster != 1)) {
+        largest_pop <- names(which.max(table(seal_df$pop)))
+        seal_df_largest_pop <- seal_df[seal_df$pop == largest_pop, ]
+    if (nrow(seal_df) != nrow(seal_df_largest_cluster)) {
+        df_name <- paste0(species, "_pop")
+        return(list(df_name, seal_df_largest_pop))
+    }
+    }
+}
+
+largest_pop <- lapply(dataset_names, pop_df, all_seals_clusters_final)
+
+# get rid of non-cluster populations (NULL anyway) and keep new largest cluster data.frames
+largest_pops_for_clustered <- largest_pop[!sapply(largest_pop, is.null)]
+names_pops <- unlist(lapply(largest_pops_for_clustered , function(x) x[1]))
+largest_pops_geno <- lapply(largest_pops_for_clustered, function(x) x[[2]])
+names(largest_pops_geno) <- names_pops 
+
+# append to all_seals_extended
+all_seals_clusts_pops <- append(all_seals_extended, largest_pops_geno)
+names(all_seals_clusts_pops)
+
+# write excel file with each dataset 
+library(WriteXLS)
+envir <- environment()
+list_to_df <- function(species, dfs, envir){
+    assign(species, dfs[[species]], envir)
+}
+lapply(names(all_seals_clusts_pops), list_to_df, all_seals_clusts_pops, envir)
+WriteXLS(names(all_seals_clusts_pops), ExcelFileName = "seal_data_largest_clust_and_pop.xls")
+
+
+# extract nes k = 2 and add data.frame to file --> decision for k = 2 due to assignment plot
+nes_k2 <- runs_to_df_reduced[["nes"]]$K_2
+cluster <- apply(nes_k2, 1, which.max)
+table(nes$pop)
+nes <- all_seals[["nes"]]
+nes <- cbind(nes[1:2], cluster, nes[3:ncol(nes)])
+all_seals_clusts_pops$nes_cl_2 <- nes[nes$cluster==2, ]
+names(all_seals_clusts_pops)
+nes_cl_2 <- all_seals_clusts_pops$nes_cl_2
+WriteXLS(names(all_seals_clusts_pops), ExcelFileName = "seal_data_largest_clust_and_pop.xls")
+
+?save
+save(all_seals_clusts_pops, file = "seals_full.RData")
+
+

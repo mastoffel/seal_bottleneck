@@ -1,6 +1,8 @@
 .Rproj.user
 .Rhistory
 .RData
+seals_full.RData
+struc_out.RData
 cluster_summary_plots/
 structure_results/
 old/
