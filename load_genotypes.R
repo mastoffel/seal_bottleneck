@@ -1,10 +1,12 @@
 library(readxl)
-
+library(devtools)
+install_github("hadley/readxl")
+library(readxl)
 # sheet numbers to load
-dataset_names <- excel_sheets("data/all_seals_full_final.xls")
+dataset_names <- excel_sheets("data/all_seals_full_plus_pop_cluster.xls")
 
 load_dataset <- function(dataset_names) {
-    read_excel("data/all_seals_full_final.xls", sheet = dataset_names)
+    read_excel("data/all_seals_full_plus_pop_cluster.xls", sheet = dataset_names)
 }
 
 # load all datasets
