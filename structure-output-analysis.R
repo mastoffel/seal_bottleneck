@@ -11,19 +11,30 @@
 
 # summarising output with pophelper package from github
 
-
+library(devtools)
 # load data with original population names ---------------------------------------------------------
 library(readxl)
+# install.packages("gdata")
+library(gdata)
 # sheet numbers to load
 dataset_names <- excel_sheets("data/all_seals_full_final.xls")
+
 
 load_dataset <- function(dataset_names) {
     read_excel("data/all_seals_full_final.xls", sheet = dataset_names)
 }
+
+# load_dataset <- function(dataset_names) {
+#     read.xls("data/all_seals_basic.xls", sheet = dataset_names, stringsAsFactors = FALSE)
+# }
+
 # load all datasets
 all_seals <- lapply(dataset_names, load_dataset)
 names(all_seals) <- dataset_names
 
+# delete anderson walrus
+all_seals$atlantic_walrus_andersen <- NULL
+dataset_names <- dataset_names[-19]
 
 # process structure results ------------------------------------------------------------------------
 library(devtools)
@@ -33,14 +44,14 @@ library(magrittr)
 # preparation
 
 # folder that contains output from STRUCTURE, whereby each seal species has its own folder
-path_to_structure_out <- "structure_results/"
+path_to_structure_out <- "data/structure_results/"
 
 # get names for all structure files that end with f
 seal_species_names <- names(all_seals)
 
 # create folder for STRUCTURE summary plots
-system("mkdir cluster_summary_plots")
-system("mkdir structure_result_tables")
+system("mkdir data/cluster_summary_plots")
+system("mkdir data/structure_result_tables")
 
 # structure output summary and lnK plots -----------------------------------------------------------
 seals_structure_summary <- list()
@@ -58,8 +69,8 @@ for (i in 1:length(seal_species_names)) {
         summariseRunsStructure() %>%
         evannoMethodStructure(exportplot = T, imgtype = "pdf", writetable = TRUE)
     # move plot into plot folder and rename it
-    system(paste0("mv evannoMethodStructure.pdf cluster_summary_plots/", seal_species_names[i], ".pdf"))
-    system(paste0("mv evannoMethodStructure.txt structure_result_tables/", seal_species_names[i], ".txt"))
+    system(paste0("mv evannoMethodStructure.pdf data/cluster_summary_plots/", seal_species_names[i], ".pdf"))
+    system(paste0("mv evannoMethodStructure.txt data/structure_result_tables/", seal_species_names[i], ".txt"))
 
     runs_to_df[[i]] <- runsToDfStructure(struc_out_paths)
     seals_structure_summary[[i]] <- structure_summary
@@ -69,7 +80,7 @@ names(seals_structure_summary)
 
 
 
-system("mkdir clumpp")
+system("mkdir data/clumpp")
 for (i in 1:length(seal_species_names)) {
     # lists all files in structure output folder 
     all_files <- list.files(paste0(path_to_structure_out, seal_species_names[i]))
@@ -80,25 +91,25 @@ for (i in 1:length(seal_species_names)) {
     # basic usage
     clumppExportStructure(files=struc_out_paths, prefix = seal_species_names[i])
     # create species directory in clumpp
-    system(paste0("mkdir clumpp/", seal_species_names[i]))
+    system(paste0("mkdir data/clumpp/", seal_species_names[i]))
     # copy all pophelper-prepared structure folders into clumpp/species
-    system(paste0("mv ", seal_species_names[i], "_K* clumpp/", seal_species_names[i]))
+    system(paste0("mv ", seal_species_names[i], "_K* data/clumpp/", seal_species_names[i]))
     # copy CLUMPP executable into every folder
-    system(paste0("for i in clumpp/", seal_species_names[i], "/", seal_species_names[i], "_K*; do cp /Users/martin/programs/CLUMPP $i; done"))
+    system(paste0("for i in data/clumpp/", seal_species_names[i], "/", seal_species_names[i], "_K*; do cp /Users/martin/programs/CLUMPP $i; done"))
     # for computation time reasons remove K > 6
-    system(paste0("rm -r clumpp/", seal_species_names[i], "/*_K10"))
-    system(paste0("rm -r clumpp/", seal_species_names[i], "/*_K[7-9]"))
+    system(paste0("rm -r data/clumpp/", seal_species_names[i], "/*_K10"))
+    system(paste0("rm -r data/clumpp/", seal_species_names[i], "/*_K[7-9]"))
     # execute CLUMPP (the brackets activate a secondary shell)
     # system(paste0('for i in clumpp/', seal_species_names[i], '/*/ ; do (cd "$i" && /Users/martin/program/CLUMPP); done'))
-    system(paste0('for i in clumpp/', seal_species_names[i], '/*/ ; do (cd "$i" && ./CLUMPP); done'))
+    system(paste0('for i in data/clumpp/', seal_species_names[i], '/*/ ; do (cd "$i" && ./CLUMPP); done'))
 } 
 
 
 # collectCLumppOutput and plot
-system("mkdir structure_assignment_plots")
+system("mkdir data/structure_assignment_plots")
 for (i in 1:length(seal_species_names)) {
     current_dir <- getwd()
-    setwd(paste0("/Users/martin/Dropbox/projects/current/bottleneck/seal_bottleneck_analysis/clumpp/",
+    setwd(paste0("/Users/martin/Dropbox/projects/current/bottleneck/seal_bottleneck_analysis/data/clumpp/",
                  seal_species_names[i]))
     # function to summarize CLUMPP output
     collectClumppOutput(prefix = seal_species_names[i], filetype = "aligned")
@@ -109,9 +120,9 @@ for (i in 1:length(seal_species_names)) {
     # plot pdfs
     plotRuns(files=path_to_slist, imgoutput = "tab", imgtype = "pdf", sortind = "all")
     # create folder for pdfs
-    system(paste0("mkdir ../../structure_assignment_plots/", seal_species_names[i]))
+    system(paste0("mkdir /Users/martin/Dropbox/projects/current/bottleneck/seal_bottleneck_analysis/data/structure_assignment_plots/", seal_species_names[i]))
     # move plots to folders
-    system(paste0("mv *pdf ../../structure_assignment_plots/", seal_species_names[i]))
+    system(paste0("mv *pdf /Users/martin/Dropbox/projects/current/bottleneck/seal_bottleneck_analysis/data/structure_assignment_plots/", seal_species_names[i]))
     # go back to working directory
     setwd(current_dir)
 }
@@ -198,6 +209,9 @@ all_seals_clusters_final <- lapply(all_seals_clusters, function(x){
                                                             })
 names(all_seals_clusters_final) <- dataset_names
 
+# delete first two loci of crabeater_seal
+all_seals_clusters_final$crabeater_seal_recoded <- all_seals_clusters_final$crabeater_seal_recoded[, -c(4:7)]
+
 # write excel file with each dataset plus clusters
 library(WriteXLS)
 envir <- environment()
@@ -240,7 +254,7 @@ pop_df <- function(species, all_seals_clusters_final){
     if (any(seal_df$cluster != 1)) {
         largest_pop <- names(which.max(table(seal_df$pop)))
         seal_df_largest_pop <- seal_df[seal_df$pop == largest_pop, ]
-    if (nrow(seal_df) != nrow(seal_df_largest_cluster)) {
+    if (nrow(seal_df) != nrow(seal_df_largest_pop)) {
         df_name <- paste0(species, "_pop")
         return(list(df_name, seal_df_largest_pop))
     }
@@ -266,7 +280,7 @@ list_to_df <- function(species, dfs, envir){
     assign(species, dfs[[species]], envir)
 }
 lapply(names(all_seals_clusts_pops), list_to_df, all_seals_clusts_pops, envir)
-WriteXLS(names(all_seals_clusts_pops), ExcelFileName = "seal_data_largest_clust_and_pop.xls")
+# WriteXLS(names(all_seals_clusts_pops), ExcelFileName = "seal_data_largest_clust_and_pop.xls")
 
 
 # extract nes k = 2 and add data.frame to file --> decision for k = 2 due to assignment plot
@@ -280,7 +294,7 @@ names(all_seals_clusts_pops)
 nes_cl_2 <- all_seals_clusts_pops$nes_cl_2
 WriteXLS(names(all_seals_clusts_pops), ExcelFileName = "seal_data_largest_clust_and_pop.xls")
 
-?save
+
 save(all_seals_clusts_pops, file = "seals_full.RData")
 
 

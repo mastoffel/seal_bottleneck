@@ -1,6 +1,6 @@
 library(readxl)
 library(devtools)
-install_github("hadley/readxl")
+# install_github("hadley/readxl")
 library(readxl)
 # sheet numbers to load
 dataset_names <- excel_sheets("data/all_seals_full_plus_pop_cluster.xls")

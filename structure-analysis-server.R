@@ -1,5 +1,9 @@
+## load a list of genetic data frames and runs STRUCTURE in parallel on all of them
+save(all_seals, file= "seal_bottleneck_data_simple.RData")
 # structure analyses
 load("seal_bottleneck_data_simple.RData")
+
+all_seals <- lapply(all_seals)
 
 library(ParallelStructure)
 

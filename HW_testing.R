@@ -1,3 +1,7 @@
+# script to calculate HW for all seal microsatellite datasets and select HW loci and put these
+# into a new excel file as additional datasets
+
+
 # Hardy Weinberg
 library(pegas)
 library("ape")
@@ -9,11 +13,41 @@ library(stringr)
 library(dplyr)
 
 # load cleaned seal data
-load("seals_full.RData")
-seal_data <- all_seals_clusts_pops
+library(readxl)
+# sheet numbers to load
+dataset_names <- excel_sheets("data/seal_data_largest_clust_and_pop.xlsx")
+
+load_dataset <- function(dataset_names) {
+    read_excel("data/seal_data_largest_clust_and_pop.xlsx", sheet = dataset_names)
+}
+
+# load all datasets
+seal_data <- lapply(dataset_names, load_dataset)
+names(seal_data) <- dataset_names
+
+# check that all loci names start with a letter
+# modify_locus_names <- function(df) {
+#     loci_names <- names(df)
+#     loci_names <- c(loci_names[1:3], paste0("L_", loci_names[4:length(loci_names)]))
+#     names(df) <- loci_names
+#     df
+# }
+# seal_data <- lapply(seal_data, modify_locus_names)
+
+
+# still variable name issues, exchange . and - 
+# modify_locus_names2 <- function(df){
+#     loci_names <- names(df) %>%
+#                 str_replace("-", "") 
+#     names(df) <- loci_names
+#     df
+# }
+# seal_data <- lapply(seal_data, modify_locus_names2) 
+
 # create genind files where genotypes are stored as "134/140" instead of two column format and save
 # them in folder ../data/genind_formatted as tab seperated text files, including id and population--------
 
+# where do the genotypes start?
 gene_start <- 4
 # create file with genotypes stored as "134/140" from two-column per locus format
 change_geno_format <- function(seal_data_df) {
@@ -65,6 +99,7 @@ for (i in 1:length(seal_data_locus_format)) {
 }
 
 seal_data_pegas <- list()
+library(pegas)
 for (i in 1:length(seal_data_locus_format)) {
 seal_data_pegas[[names(seal_data_locus_format)[i]]] <- read.loci(paste("data/genind_formatted/", names(seal_data_locus_format)[i], ".txt", sep = ""),
                header = TRUE, loci.sep = " ", allele.sep = "/", col.pop = 2, col.loci = c(3:ncol(seal_data_locus_format[[i]])))
@@ -82,7 +117,10 @@ total_genotypes <- sample_size * loci_full
 load("seal_data_pegas.RData")
 
 # hardy weinberg tests on everything
-all_hw <- lapply(seal_data_pegas, hw.test)
+all_hw <- lapply(seal_data_pegas, hw.test, B = 10000)
+
+save(all_hw, file = "all_hw_10000iter.RData")
+load("all_hw_10000iter.RData")
 all_non_hw <- lapply(all_hw, function(x) {
                                     x <- as.data.frame(x)
                                     x[which(x["Pr.exact"] < 0.05), ]
@@ -111,6 +149,20 @@ bonf_corr <- function(x) {
 }
 all_hw_bonf <- lapply(all_hw, bonf_corr)
 
+## get loci in HW according to exact test
+bonf_corr_loci <- function(x) {
+    x <- as.data.frame(x)
+    x$p_exac_bonf <- p.adjust(x$Pr.exact, method = "bonferroni")
+    if (any(x$p_exac_bonf < 0.05)){
+        loci_non_hw <- which(x$p_exac_bonf < 0.05)
+        return(row.names(x)[-loci_non_hw])
+    } else {
+    return(row.names(x))
+    }
+}
+all_hw_bonf_loci <- lapply(all_hw, bonf_corr_loci)
+
+
 # how many loci not in hw per test?
 non_hw_p_bonf <- unlist(lapply(all_hw_bonf, function(x) sum(x$p_exac_bonf < 0.05)))
 non_hw_chi_bonf <- unlist(lapply(all_hw_bonf, function(x) sum(x$chi_bonf < 0.05)))
@@ -129,12 +181,59 @@ seal_data_descr <- data.frame("names" = names(seal_data),
                             "non_hw_chisqu_bonf" = non_hw_chi_bonf,
                               "non_hw_both_tests" = non_hw_both_bonf)
                               
-
+library(WriteXLS)
 WriteXLS(seal_data_descr, "seal_data_descriptives.xls")
 
 
-# NULL allele test
-library(PopGenReport)
-test <- loci2genind(seal_data_pegas[[1]])
-seal_data_genind <- lapply(seal_data_pegas, loci2genind) 
-?null.all
+## get loci in HW according to exact test
+bonf_corr_loci <- function(x) {
+    x <- as.data.frame(x)
+    x$p_exac_bonf <- p.adjust(x$Pr.exact, method = "bonferroni")
+    if (any(x$p_exac_bonf < 0.05)){
+        loci_non_hw <- which(x$p_exac_bonf < 0.05)
+        return(row.names(x)[-loci_non_hw])
+    } else {
+        return(row.names(x))
+    }
+}
+all_hw_bonf_loci <- lapply(all_hw, bonf_corr_loci)
+
+
+library(stringr)
+extract_loci_in_hw <- function(species, all_hw_bonf_loci, seal_data){
+    loci_hw <- all_hw_bonf_loci[[species]]
+    if (length(loci_hw) == 0) return(seal_data[[species]][c(1:3)])
+    loci_names <- names(seal_data[[species]])
+    # problem of multiple matching
+    which_match <- function(loci_in_hw) out <- which(!is.na(str_match(loci_names, loci_in_hw)))
+    loci_a <- paste0(loci_hw, "_a")
+    loci_b <- paste0(loci_hw, "_b")
+    
+    col_in_hw_a <- unique(as.numeric(unlist(sapply(loci_a, which_match))))
+    col_in_hw_b <- unique(as.numeric(unlist(sapply(loci_b, which_match))))
+    
+    col_in_hw <-  sort(c(col_in_hw_a, col_in_hw_b))
+    
+    seals <- seal_data[[species]]
+    out <- cbind(seals[, c(1:3)], seals[, col_in_hw])
+}
+
+species <- names(seal_data)
+
+all_seals_in_hw <- lapply(species , extract_loci_in_hw, all_hw_bonf_loci,  seal_data)
+names(all_seals_in_hw) <- species
+unlist(lapply(all_seals_in_hw, function(x) ncol(x) - 3)) / 2
+# extract get data.frames just with loci in HW
+
+
+# write excel file with each dataset 
+library(WriteXLS)
+envir <- environment()
+list_to_df <- function(species, dfs, envir){
+    assign(species, dfs[[species]], envir)
+}
+
+lapply(names(all_seals_in_hw), list_to_df, all_seals_in_hw, envir)
+
+WriteXLS(names(all_seals_in_hw), ExcelFileName = "seal_data_largest_clust_and_pop_all_hw.xls")
+
